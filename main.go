@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"os"
 	"strings"
@@ -12,10 +13,29 @@ const (
 	ENV_SLACK_API_TOKEN = "ENV_SLACK_API_TOKEN"
 )
 
+type flagVar struct {
+	prefix *bool
+}
+
 func main() {
-	userGroupNamesStr := os.Args[1]
+	fVar := &flagVar{}
+	fVar.prefix = flag.Bool("prefix", false, "for prefix match")
+	flag.Parse()
+
+	cmd := flag.Arg(0)
+	switch cmd {
+	case "subteam":
+		subteamCMD(fVar)
+	default:
+		panic("command not supported")
+	}
+
+}
+
+func subteamCMD(fVar *flagVar) {
+	userGroupNamesStr := flag.Arg(1)
 	userGroupNames := strings.Split(userGroupNamesStr, ",")
-	result := map[string]*slack.UserGroup{}
+	result := map[string][]slack.UserGroup{}
 	for _, userGroup := range userGroupNames {
 		result[userGroup] = nil
 	}
@@ -25,17 +45,24 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	for i, userGroup := range userGroups {
-		_, ok := result[userGroup.Handle]
-		if ok {
-			result[userGroup.Handle] = &userGroups[i]
+	for _, userGroup := range userGroups {
+		for key := range result {
+			if *fVar.prefix {
+				if strings.HasPrefix(userGroup.Handle, key) {
+					result[key] = append(result[key], userGroup)
+				}
+				continue
+			}
+			if userGroup.Handle == key {
+				result[key] = append(result[key], userGroup)
+			}
 		}
 	}
-	for key, r := range result {
-		id := ""
-		if r != nil {
+	for _, rSlice := range result {
+		for _, r := range rSlice {
+			id := ""
 			id = r.ID
+			fmt.Println(r.Handle, ":", id)
 		}
-		fmt.Println(key, ":", id)
 	}
 }
